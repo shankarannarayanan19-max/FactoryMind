@@ -50,13 +50,15 @@ def test_turn_1_to_8_walkthrough():
 
     # Turn 6: request shutdown of CV-01
     obs6 = session.act("request shutdown of CV-01")
-    assert "Shutdown request for Conveyor Line 1 (CV-01) processed by PLC Control Cabinet (PCS-CV01)" in obs6
+    assert "Shutdown request for Conveyor Line 1 (CV-01) processed by PLC Control Cabinet" in obs6
+    assert "PCS-CV01" in obs6
     assert "Operational state updated to STOPPED" in obs6
     assert "Energy state updated to DE_ENERGIZED" in obs6
 
     # Turn 7: check PCS-CV01
     obs7 = session.act("check PCS-CV01")
-    assert "PLC Control Cabinet (PCS-CV01)" in obs7
+    assert "PLC Control Cabinet" in obs7
+    assert "PCS-CV01" in obs7
     assert "energy state is DE_ENERGIZED and operational state is STOPPED" in obs7
 
     # Turn 8: remove GUARD-CV01

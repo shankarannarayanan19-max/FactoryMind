@@ -17,6 +17,7 @@ class LLMBridge:
         self._model = None
         if not use_stub and model_path:
             try:
+                # pyrefly: ignore [missing-import]
                 from llama_cpp import Llama
                 self._model = Llama(model_path=model_path, verbose=False)
             except Exception:

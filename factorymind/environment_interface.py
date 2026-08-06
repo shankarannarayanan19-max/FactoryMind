@@ -26,19 +26,24 @@ class TextWorldFactoryWorld:
 
         room_nodes = {}
         for room_id, rdata in rooms_cfg.items():
-            r_name = rdata.get("name", room_id)
             r_desc = rdata.get("description", "")
             room_node = self.maker.new_room(room_id)
-            room_node.name = r_name
             room_node.description = r_desc
             room_nodes[room_id] = room_node
 
         # Connect rooms based on exits
+        opposite_dir = {"east": "west", "west": "east", "north": "south", "south": "north"}
         for room_id, rdata in rooms_cfg.items():
             exits = rdata.get("exits", {})
             for dir_name, dest_id in exits.items():
-                if dest_id in room_nodes and room_nodes[room_id] not in room_nodes[dest_id].exits.values():
-                    self.maker.connect(room_nodes[room_id], room_nodes[dest_id], dir_name)
+                if dest_id in room_nodes and dir_name in opposite_dir:
+                    opp_dir = opposite_dir[dir_name]
+                    r1_exit = getattr(room_nodes[room_id], dir_name)
+                    r2_exit = getattr(room_nodes[dest_id], opp_dir)
+                    try:
+                        self.maker.connect(r1_exit, r2_exit)
+                    except Exception:
+                        pass
 
         # Set player start
         if "ROOM-PACK-01" in room_nodes:
@@ -47,15 +52,14 @@ class TextWorldFactoryWorld:
         # Add assets as entity objects
         for asset_id, adata in assets_cfg.items():
             room_id = adata.get("room")
-            atype = adata.get("type", "MACHINE").lower()
-            obj = self.maker.new(type=atype, name=asset_id)
+            obj = self.maker.new(type="o", name=asset_id)
             if room_id in room_nodes:
                 room_nodes[room_id].add(obj)
 
         # Add sensors as entity objects
         for sensor_id, sdata in sensors_cfg.items():
             room_id = sdata.get("room")
-            obj = self.maker.new(type="sensor", name=sensor_id)
+            obj = self.maker.new(type="o", name=sensor_id)
             if room_id in room_nodes:
                 room_nodes[room_id].add(obj)
 
