@@ -1,0 +1,10 @@
+procedures:
+  PROC-BEARING-INSPECT:
+    title: "Tail Motor Bearing Thermal & Vibration Inspection Procedure"
+    steps:
+      - "1. Observe telemetry sensors TS-CVM02-BRG and VS-CVM02."
+      - "2. If telemetry is elevated (>70C or >3.0 mm/s), request shutdown of CV-01."
+      - "3. Confirm energy state is DE_ENERGIZED via PLC PCS-CV01."
+      - "4. Remove guard GUARD-CV01."
+      - "5. Take independent portable measurement using infrared pyrometer."
+      - "6. Reconcile readings and issue work order if bearing defect confirmed."

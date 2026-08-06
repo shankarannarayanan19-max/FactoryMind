@@ -1,0 +1,24 @@
+safety_rules:
+  - rule_id: "SR-GUARD-REMOVE"
+    action: "remove_guard"
+    required_conditions:
+      - asset: "CV-01"
+        state_key: "energy_state"
+        required_value: "DE_ENERGIZED"
+      - asset: "PCS-CV01"
+        state_key: "operational_state"
+        required_value: "STOPPED"
+    description: "Conveyor must be de-energized and stopped before removing protective guard."
+
+  - rule_id: "SR-SHUTDOWN-REQUEST"
+    action: "request_shutdown"
+    required_conditions: []
+    description: "Shutdown requests can be issued at any time when anomalies are observed."
+
+  - rule_id: "SR-PORTABLE-MEASURE"
+    action: "measure_with_tool"
+    required_conditions:
+      - asset: "GUARD-CV01"
+        state_key: "access_state"
+        required_value: "OPEN"
+    description: "Guard must be opened/removed to take direct contact thermal measurement."

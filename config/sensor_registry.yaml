@@ -1,0 +1,17 @@
+sensors:
+  TS-CVM02-BRG:
+    name: "Tail Bearing Temperature Sensor"
+    type: "SENSOR"
+    sensor_type: "TEMPERATURE"
+    room: "ROOM-PACK-01"
+    monitors: "CV-M02"
+    unit: "C"
+    description: "Fixed RTD surface temperature sensor mounted on CV-M02 bearing housing."
+  VS-CVM02:
+    name: "Tail Motor Vibration Sensor"
+    type: "SENSOR"
+    sensor_type: "VIBRATION"
+    room: "ROOM-PACK-01"
+    monitors: "CV-M02"
+    unit: "mm/s"
+    description: "Fixed piezo accelerometer measuring RMS vibration velocity on CV-M02."

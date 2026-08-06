@@ -1,0 +1,30 @@
+assets:
+  CV-01:
+    name: "Conveyor Line 1"
+    type: "CONVEYOR"
+    room: "ROOM-PACK-01"
+    description: "Primary material transport conveyor line."
+  CV-M01:
+    name: "Main Drive Motor"
+    type: "MOTOR"
+    room: "ROOM-PACK-01"
+    part_of: "CV-01"
+    description: "Primary electric motor driving conveyor head pulley."
+  CV-M02:
+    name: "Tail Drive Motor & Bearing Assembly"
+    type: "MOTOR"
+    room: "ROOM-PACK-01"
+    part_of: "CV-01"
+    description: "Tail drive motor and roller bearing assembly."
+  GUARD-CV01:
+    name: "Conveyor Interlocked Guard"
+    type: "GUARD"
+    room: "ROOM-PACK-01"
+    protects: "CV-01"
+    description: "Physical interlocked protective cage covering tail drive assembly CV-M02."
+  PCS-CV01:
+    name: "PLC Control Cabinet CV-01"
+    type: "PLC"
+    room: "ROOM-PACK-01"
+    controls: "CV-01"
+    description: "Programmable logic controller panel governing conveyor CV-01 speed and power."

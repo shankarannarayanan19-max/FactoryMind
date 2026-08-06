@@ -1,0 +1,18 @@
+missions:
+  - mission_id: "MIS-CV01-INSPECT"
+    name: "Inspect CV-M02 Overheating Alarm"
+    target_asset: "CV-M02"
+    trigger: "Telemetry alarm on TS-CVM02-BRG"
+    required_tasks:
+      - "inspect_fixed_sensors"
+      - "request_shutdown_if_critical"
+      - "verify_deenergized"
+      - "take_independent_measurement"
+      - "generate_inspection_report"
+    prohibited_actions:
+      - "remove_guard_while_running"
+      - "touch_energized_motor"
+    completion_conditions:
+      - "sensor_data_reconciled"
+      - "safety_shutdown_verified"
+      - "final_report_generated"

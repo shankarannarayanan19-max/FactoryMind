@@ -1,0 +1,17 @@
+rooms:
+  ROOM-PACK-01:
+    name: "Packaging Bay 1"
+    description: "Main packaging bay containing conveyor line CV-01 and drive assemblies."
+    exits:
+      east: "ROOM-CTRL-01"
+      north: "ROOM-MAINT-01"
+  ROOM-CTRL-01:
+    name: "Control Room 1"
+    description: "Central control room with SCADA workstations and main breaker panels."
+    exits:
+      west: "ROOM-PACK-01"
+  ROOM-MAINT-01:
+    name: "Maintenance Shop"
+    description: "Maintenance workshop with diagnostic tools and replacement components."
+    exits:
+      south: "ROOM-PACK-01"

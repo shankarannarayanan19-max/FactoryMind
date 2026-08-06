@@ -1,0 +1,12 @@
+thresholds:
+  CV-M02:
+    temperature_C:
+      normal_max: 70.0
+      warning_max: 80.0
+      critical_above: 80.0
+      unit: "C"
+    vibration_mm_s:
+      normal_max: 3.0
+      warning_max: 4.5
+      critical_above: 4.5
+      unit: "mm/s"
