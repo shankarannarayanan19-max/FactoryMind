@@ -212,11 +212,14 @@ Do not explain anything.
 
 def main():
     parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
-    parser.add_argument("--mission", type=str, default="MIS-CV01-INSPECT", help="Mission ID to execute")
-    parser.add_argument("--auto", action="store_true", default=True, help="Run autonomously to completion")
-    parser.add_argument("--max-turns", type=int, default=15, help="Maximum execution turns")
-    parser.add_argument("--report-level", type=int, default=4, choices=[1, 2, 3, 4], help="Report level to output")
+    parser.add_argument(
+    "--interactive",
+    action="store_true",
+    help="Run with user input through Ollama") 
     args = parser.parse_args()
+    if args.interactive:
+        run_interactive()
+        return
 
     res = run_mission(
         mission_id=args.mission,
