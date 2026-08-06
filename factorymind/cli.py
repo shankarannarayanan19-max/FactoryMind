@@ -47,8 +47,10 @@ def run_mission(
     executor = Executor()
     checker = MissionChecker()
     report_gen = ReportGenerator()
-    llm_bridge = LLMBridge(use_stub=True)
-
+    llm_bridge = LLMBridge(
+    model_name="llama3.2:3b",
+    use_stub=False
+)
     inventory = ["infrared_pyrometer", "vibration_meter"]
     known_tool_locations = {"infrared_pyrometer": "ROOM-PACK-01"}
 

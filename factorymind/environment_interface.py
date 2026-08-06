@@ -6,15 +6,17 @@ exposing reset(), act(command) -> observation, and observe().
 
 import os
 from typing import Dict, Any, Optional, List
-# pyrefly: ignore [missing-import]
 try:
+    # pyrefly: ignore [missing-import]
     import textworld
+    # pyrefly: ignore [missing-import]
     from textworld.generator import GameMaker
     TEXTWORLD_AVAILABLE = True
 except ImportError:
     textworld = None
     GameMaker = None
     TEXTWORLD_AVAILABLE = False
+
 from factorymind.config_loader import ConfigLoader
 
 class TextWorldFactoryWorld:
