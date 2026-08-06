@@ -148,10 +148,11 @@ def run_interactive():
 
     valid_commands = """
 look
-go east
-go west
-go north
-go south
+go control room
+go east wing panel
+go main drive area
+go motor access area
+go conveyer switch room
 inspect <asset_id>
 read <sensor_id>
 check <asset_id>
@@ -212,10 +213,9 @@ Do not explain anything.
 
 def main():
     parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
-    parser.add_argument(
-    "--interactive",
-    action="store_true",
-    help="Run with user input through Ollama") 
+    parser.add_argument("--interactive",
+                        action="store_true",
+                        help="Run with user input through Ollama") 
     args = parser.parse_args()
     if args.interactive:
         run_interactive()
