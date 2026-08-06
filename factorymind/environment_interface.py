@@ -7,9 +7,14 @@ exposing reset(), act(command) -> observation, and observe().
 import os
 from typing import Dict, Any, Optional, List
 # pyrefly: ignore [missing-import]
-import textworld
-# pyrefly: ignore [missing-import]
-from textworld.generator import GameMaker
+try:
+    import textworld
+    from textworld.generator import GameMaker
+    TEXTWORLD_AVAILABLE = True
+except ImportError:
+    textworld = None
+    GameMaker = None
+    TEXTWORLD_AVAILABLE = False
 from factorymind.config_loader import ConfigLoader
 
 class TextWorldFactoryWorld:
@@ -75,9 +80,12 @@ class TextWorldSession:
             config_loader = ConfigLoader()
             config_loader.load_all()
         self.config_loader = config_loader
-        self.builder = TextWorldFactoryWorld(self.config_loader)
-        self.maker = self.builder.build_game()
-        
+        if TEXTWORLD_AVAILABLE:
+            self.builder = TextWorldFactoryWorld(self.config_loader)
+            self.maker = self.builder.build_game()
+        else:
+            self.builder = None
+            self.maker = None
         # State tracking
         self.current_room = "ROOM-PACK-01"
         self.turn_count = 0
