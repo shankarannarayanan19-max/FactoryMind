@@ -132,8 +132,51 @@ def main():
         max_turns=args.max_turns,
         report_level=args.report_level
     )
-    print("=== FactoryMind Mission Execution Result ===")
-    print(res)
+    if "report" in res:
+        report = res["report"]
+        print("\n" + "=" * 70)
+        print("               FACTORYMIND AI INSPECTION REPORT")
+        print("=" * 70)
+
+        print(f"Mission ID      : {report['mission_id']}")
+        print(f"Report ID       : {report['report_id']}")
+        print(f"Mission Status  : {report['mission_status']}")
+        print(f"Severity        : {report['severity']}")
+
+        print("\nDiagnosis")
+        print("-" * 70)
+        print(report["diagnosis"])
+
+        print("\nRecommendation")
+        print("-" * 70)
+        print(report["recommendation"])
+
+        print("\nEvidence")
+        print("-" * 70)
+
+        for evidence in report.get("evidence", []):
+            print(f"Sensor  : {evidence['sensor_id']}")
+            print(f"Asset   : {evidence['monitored_asset']}")
+            print(f"Reading : {evidence['value']} {evidence['unit']}")
+            print(f"Status  : {evidence['status']}")
+            print()
+
+        print("Safety Events")
+        print("-" * 70)
+
+        for event in report.get("safety_checks", []):
+            print(
+                f"Turn {event.get('turn', 0)} | "
+                f"{event.get('event_type', '')} | "
+                f"{event.get('severity', '')}"
+            )
+
+        print("\nRepair Performed :", report.get("repair_performed", False))
+        print("=" * 70)
+    else:
+        print("=== FactoryMind Mission Execution Result ===")
+        print(res)
 
 if __name__ == "__main__":
     main()
+
