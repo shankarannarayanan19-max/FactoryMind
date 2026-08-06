@@ -118,6 +118,98 @@ def run_mission(
 
     return output
 
+def run_interactive():
+    """Run FactoryMind using user input and local Ollama."""
+
+    config_loader = ConfigLoader()
+    config_loader.load_all()
+
+    session = TextWorldSession(config_loader=config_loader)
+
+    llm_bridge = LLMBridge(
+        model_name="llama3.2:3b",
+        use_stub=False
+    )
+
+    observation = session.reset()
+
+    print("\n" + "=" * 70)
+    print("             FACTORYMIND INTERACTIVE TEXT WORLD")
+    print("=" * 70)
+    print(observation)
+
+    print("\nType what you want to do.")
+    print("Examples:")
+    print("  Check the conveyor")
+    print("  Read the temperature sensor")
+    print("  Shut down the conveyor")
+    print("  Go to the control room")
+    print("  Type 'exit' to stop")
+
+    valid_commands = """
+look
+go east
+go west
+go north
+go south
+inspect <asset_id>
+read <sensor_id>
+check <asset_id>
+request shutdown of <asset_id>
+open <guard_id>
+remove <guard_id>
+measure temperature of <asset_id> with infrared_pyrometer
+measure vibration of <asset_id> with vibration_meter
+create work order for <asset_id>
+"""
+
+    while True:
+        user_input = input("\nYOU > ").strip()
+
+        if user_input.lower() in ["exit", "quit", "bye"]:
+            print("\nFactoryMind session ended.")
+            break
+
+        prompt = f"""
+You are the command interpreter for an industrial text-world game.
+
+Convert the user's request into exactly ONE valid game command.
+
+Available commands:
+{valid_commands}
+
+Important identifiers:
+CV-01 = Conveyor Line 1
+CV-M01 = Main Drive Motor
+CV-M02 = Tail Drive Motor and Bearing Assembly
+GUARD-CV01 = Conveyor Safety Guard
+PCS-CV01 = PLC Control Cabinet
+TS-CVM02-BRG = Temperature Sensor
+VS-CVM02 = Vibration Sensor
+
+Current world observation:
+{observation}
+
+User request:
+{user_input}
+
+Return only the game command.
+Do not explain anything.
+"""
+
+        command = llm_bridge.generate(prompt).strip()
+
+        # Remove accidental formatting from the LLM.
+        command = command.replace("```", "").strip()
+        command = command.splitlines()[0].strip()
+
+        print(f"OLLAMA COMMAND > {command}")
+
+        observation = session.act(command)
+
+        print("\nFACTORYMIND >")
+        print(observation)
+
 def main():
     parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
     parser.add_argument("--mission", type=str, default="MIS-CV01-INSPECT", help="Mission ID to execute")
