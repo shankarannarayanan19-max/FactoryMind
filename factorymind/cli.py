@@ -33,7 +33,7 @@ from factorymind.safety_validator import SafetyValidator
 from factorymind.world_model import WorldModel
 
 
-QWEN_MODEL = "qwen3:4b"
+QWEN_MODEL = "qwen3:1.7b"
 
 
 # ---------------------------------------------------------------------

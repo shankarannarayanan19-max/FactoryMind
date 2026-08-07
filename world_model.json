@@ -15,11 +15,6 @@
     ],
     "safety_checks": [
       {
-        "event_type": "LOCATION_TRANSITION_CONFLICT",
-        "severity": "WARNING",
-        "turn": 2
-      },
-      {
         "event_type": "ASSET_HEALTH_DEGRADED",
         "severity": "CRITICAL",
         "turn": 2
@@ -38,7 +33,7 @@
     "diagnosis": "Severe bearing degradation on CV-M02 causing elevated temperature (82.0 C) and RMS vibration (5.8 mm/s)",
     "severity": "CRITICAL",
     "actions_taken": [
-      "{'turn': 1, 'observation': 'Location: Motor Room (ROOM-MOTOR-01).\\nExits: east to Control Room 1 (ROOM-CTRL-01).\\nYou observe the following equipment: Drive Motor M-05 (M-05), Motor M-05 Bearing Temperature Sensor (TS-M05-BRG), Motor M-05 Vibration Sensor (VS-M05), Motor M-05 Tachometer Speed Sensor (RPM-M05).', 'nav_intent': None, 'room': 'ROOM-MOTOR-01'}",
+      "{'turn': 1, 'observation': 'Location: Packaging Bay 1 (ROOM-PACK-01).\\nExits: east to Control Room 1 (ROOM-CTRL-01), north to Maintenance Shop (ROOM-MAINT-01).\\nYou observe the following equipment: Conveyor Line 1 (CV-01), Main Drive Motor (CV-M01), Tail Drive Motor & Bearing Assembly (CV-M02), Conveyor Interlocked Guard (GUARD-CV01), PLC Control Cabinet CV-01 (PCS-CV01), Tail Bearing Temperature Sensor (TS-CVM02-BRG), Tail Motor Vibration Sensor (VS-CVM02).', 'nav_intent': None, 'room': 'ROOM-PACK-01'}",
       "{'turn': 2, 'observation': 'Tail Bearing Temperature Sensor (TS-CVM02-BRG) monitors Tail Drive Motor & Bearing Assembly (CV-M02) in Packaging Bay 1 (ROOM-PACK-01). Reading: 82.0 C. Threshold normal max: 70.0 C, warning max: 80.0 C, critical above: 80.0 C. Telemetry status: WARNING (ALARM: ELEVATED_TEMPERATURE).', 'nav_intent': None, 'room': 'ROOM-PACK-01'}",
       "{'turn': 3, 'observation': 'Shutdown request for Conveyor Line 1 (CV-01) processed by PLC Control Cabinet CV-01 (PCS-CV01). Motor drive de-energized. Operational state updated to STOPPED. Energy state updated to DE_ENERGIZED.', 'nav_intent': None, 'room': 'ROOM-PACK-01'}",
       "{'turn': 4, 'observation': 'Interlocked Safety Guard (GUARD-CV01) protecting Conveyor Line 1 (CV-01) tail drive assembly CV-M02 has been opened and removed. Access state is now OPEN.', 'nav_intent': None, 'room': 'ROOM-PACK-01'}",
