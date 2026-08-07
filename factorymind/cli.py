@@ -244,9 +244,11 @@ look
 
 def main():
     parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
-    parser.add_argument("--interactive",
-                        action="store_true",
-                        help="Run with user input through Ollama") 
+    parser.add_argument("--interactive", action="store_true", help="Run with user input through Ollama")
+    parser.add_argument("--mission", type=str, default="MIS-CV01-INSPECT", help="Mission ID to run")
+    parser.add_argument("--auto", action="store_true", default=True, help="Run mission in auto mode")
+    parser.add_argument("--max-turns", type=int, default=15, help="Maximum number of turns")
+    parser.add_argument("--report-level", type=int, default=4, help="Report level (1-4)") 
     args = parser.parse_args()
     if args.interactive:
         run_interactive()
@@ -258,6 +260,10 @@ def main():
         max_turns=args.max_turns,
         report_level=args.report_level
     )
+
+    with open("latest_mission_report.json", "w", encoding="utf-8") as f:
+        json.dump(res, f, indent=2, default=str)
+    print("\n[Report saved to latest_mission_report.json]")
     if "report" in res:
         report = res["report"]
         print("\n" + "=" * 70)
