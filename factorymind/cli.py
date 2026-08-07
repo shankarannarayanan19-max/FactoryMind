@@ -6,6 +6,7 @@ Usage:
 
 import sys
 import argparse
+import json
 from typing import Dict, Any, Optional
 from factorymind.config_loader import ConfigLoader
 from factorymind.environment_interface import TextWorldSession
@@ -224,6 +225,12 @@ look
             world_model=world_model,
             llm_bridge=llm_bridge
         )
+        import json 
+
+        with open("latest_mission_report.json", "w", encoding="utf-8") as f:
+            json.dump(report_data, f, indent=2, default=str)
+
+        print("\n[Report saved to latest_mission_report.json]")
 
         print(f"Mission ID      : {report_data['mission_id']}")
         print(f"Report ID       : {report_data['report_id']}")
