@@ -84,7 +84,7 @@ class LLMBridge:
             return self._stub_response(prompt)
 
     def _stub_response(self, prompt: str) -> str:
-        return "FactoryMind local fallback: mission evidence processed successfully."
+        return "I could not determine a valid executable action."
 
     def _extract_all_numbers(self, data: Any) -> set:
         """Extract all numeric values present in a JSON/dict structure."""
