@@ -90,8 +90,8 @@ class LLMBridge:
 
             "options": {
                 "temperature": 0.0,
-                "num_predict": 160,
-                "num_ctx": 2048,
+                "num_predict": 512,
+                "num_ctx": 4096,
                 "top_p": 0.8,
                 "top_k": 20,
             },
