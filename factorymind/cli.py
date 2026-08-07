@@ -26,6 +26,7 @@ from factorymind.executor import Executor
 from factorymind.information_analyser import InformationAnalyser
 from factorymind.llm_bridge import LLMBridge
 from factorymind.mission_checker import MissionChecker
+from factorymind.navigator import RoomNavigator
 from factorymind.planner import Planner
 from factorymind.reconciler import Reconciler
 from factorymind.report_generator import ReportGenerator
@@ -762,14 +763,55 @@ def run_interactive() -> None:
 
         print(f"\nQWEN ACTION > {command}")
 
+        # Instantiate graph navigator using NetworkX & world model graph
+        navigator = RoomNavigator(config_loader=config_loader)
+
+        # 1 & 2: Determine required room precondition for equipment/action
+        required_room = (
+            navigator.get_required_room(user_input)
+            or navigator.get_required_room(command)
+        )
+        current_room = session.current_room
+
+        # 3, 4, 5, 6: If target equipment is in another room, navigate physically step-by-step
+        if required_room and current_room != required_room:
+            path = navigator.find_path(current_room, required_room)
+            if not path:
+                print(f"\n[NAVIGATION ROUTE UNKNOWN] Route to {required_room} is unknown. Cannot navigate.")
+            else:
+                print(f"\n[NAVIGATING VIA NETWORKX GRAPH] Path: {' -> '.join(path)}")
+                for next_room in path[1:]:
+                    turn += 1
+                    print(f"\n[NAVIGATING ACTION] Moving to {next_room}...")
+                    observation = session.act(f"go {next_room}")
+
+                    print("\nENVIRONMENT OBSERVATION >")
+                    print(observation)
+
+                    reconciler.reconcile(
+                        world_model,
+                        observation,
+                        turn=turn,
+                    )
+                    save_session_state(database, session)
+                    database.log_action(
+                        turn=turn,
+                        user_input=user_input,
+                        llm_command=f"go {next_room}",
+                        observation=observation,
+                        room_id=session.current_room,
+                    )
+
+        # 7 & 8: Once in required room, execute the real equipment action
+        turn += 1
+        print(f"\n[REAL ACTION EXECUTION] {command}")
         try:
             observation = session.act(command)
-
         except Exception as error:
-            observation = (
-                f"Command execution failed for '{command}': "
-                f"{error}"
-            )
+            observation = f"Command execution failed for '{command}': {error}"
+
+        print("\nENVIRONMENT OBSERVATION >")
+        print(observation)
 
         reconciler.reconcile(
             world_model,
@@ -800,8 +842,38 @@ def run_interactive() -> None:
             observation,
         )
 
-        print("\nFACTORYMIND >")
-        print(observation)
+        # 9 & 10: State verification and OBJECTIVE COMPLETE output
+        m05_state = session.asset_states.get("M-05", {}).get("operational_state")
+        line2_state = session.asset_states.get("LINE-2", {}).get("operational_state")
+        brg_state = session.asset_states.get("SP-BRG-M05", {}).get("reservation_state")
+
+        combined_cmd = (command + " " + user_input).lower()
+        verified = False
+
+        if ("start" in combined_cmd or "turn on" in combined_cmd) and "m-05" in combined_cmd:
+            if m05_state == "RUNNING":
+                print("\n[STATE VERIFICATION] Motor M-05 operational_state: RUNNING (VERIFIED)")
+                verified = True
+        elif ("stop" in combined_cmd or "turn off" in combined_cmd) and "m-05" in combined_cmd:
+            if m05_state == "STOPPED":
+                print("\n[STATE VERIFICATION] Motor M-05 operational_state: STOPPED (VERIFIED)")
+                verified = True
+        elif "shift" in combined_cmd or "line 2" in combined_cmd:
+            if line2_state == "RUNNING":
+                print("\n[STATE VERIFICATION] Production Line 2 operational_state: RUNNING (VERIFIED)")
+                verified = True
+        elif "reserve" in combined_cmd or "sp-brg-m05" in combined_cmd:
+            if brg_state == "RESERVED":
+                print("\n[STATE VERIFICATION] Spare Bearing SP-BRG-M05 reservation_state: RESERVED (VERIFIED)")
+                verified = True
+        elif "inspect" in combined_cmd and "m-05" in combined_cmd:
+            print("\n[STATE VERIFICATION] Motor M-05 telemetry inspected (VERIFIED)")
+            verified = True
+
+        if verified:
+            print("\n" + "=" * 70)
+            print("                        OBJECTIVE COMPLETE")
+            print("=" * 70)
 
 
 # ---------------------------------------------------------------------

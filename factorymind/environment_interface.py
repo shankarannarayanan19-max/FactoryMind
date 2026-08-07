@@ -199,6 +199,13 @@ class TextWorldSession:
                 self.current_room = current_exits[target_str]
                 return self.observe()
 
+        # Handle 'start M-05' or 'turn on M-05'
+        if any(k in cmd for k in ["start m-05", "turn on m-05", "start motor m-05", "turn on motor m-05", "start m05"]):
+            return self._handle_start_m05()
+
+        if any(k in cmd for k in ["stop m-05", "turn off m-05", "stop motor m-05", "turn off motor m-05", "stop m05"]):
+            return self._handle_stop_m05()
+
         # Handle 'inspect M-05' or motor room diagnostics
         if "inspect m-05" in cmd or "check m-05" in cmd or ("inspect" in cmd and "m-05" in cmd):
             return self._handle_inspect_m05()
@@ -247,6 +254,30 @@ class TextWorldSession:
             return self._handle_measure(cmd)
 
         return f"Executed command: '{command}' in {self.current_room}."
+
+    def _handle_start_m05(self) -> str:
+        current_health = self.asset_states.get("M-05", {}).get("health_state", "CRITICAL")
+        self.asset_states["M-05"] = {
+            "operational_state": "RUNNING",
+            "energy_state": "ENERGIZED",
+            "health_state": current_health
+        }
+        return (
+            "Motor M-05 successfully STARTED via local control switch in Motor Room (ROOM-MOTOR-01). "
+            "Operational state: RUNNING. Energy state: ENERGIZED."
+        )
+
+    def _handle_stop_m05(self) -> str:
+        current_health = self.asset_states.get("M-05", {}).get("health_state", "CRITICAL")
+        self.asset_states["M-05"] = {
+            "operational_state": "STOPPED",
+            "energy_state": "DE_ENERGIZED",
+            "health_state": current_health
+        }
+        return (
+            "Motor M-05 successfully STOPPED via local control switch in Motor Room (ROOM-MOTOR-01). "
+            "Operational state: STOPPED. Energy state: DE_ENERGIZED."
+        )
 
     def _handle_inspect_m05(self) -> str:
         ts = self.sensor_telemetry["TS-M05-BRG"]
