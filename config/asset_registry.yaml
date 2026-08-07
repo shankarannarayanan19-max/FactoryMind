@@ -1,4 +1,51 @@
 assets:
+  # 3-Room Industrial Scenario Assets
+  M-05:
+    name: "Drive Motor M-05"
+    type: "MOTOR"
+    room: "ROOM-MOTOR-01"
+    description: "Primary 75kW electric drive motor powering Line 1 production shaft."
+
+  LINE-1:
+    name: "Production Line 1"
+    type: "PRODUCTION_LINE"
+    room: "ROOM-CTRL-01"
+    description: "Main automated manufacturing line 1."
+
+  LINE-2:
+    name: "Production Line 2"
+    type: "PRODUCTION_LINE"
+    room: "ROOM-CTRL-01"
+    description: "Secondary automated manufacturing line 2 (Backup / Secondary)."
+
+  PCS-LINE1:
+    name: "Line 1 PLC Controller"
+    type: "PLC"
+    room: "ROOM-CTRL-01"
+    controls: "LINE-1"
+    description: "PLC panel governing Line 1 power and operational status."
+
+  PCS-LINE2:
+    name: "Line 2 PLC Controller"
+    type: "PLC"
+    room: "ROOM-CTRL-01"
+    controls: "LINE-2"
+    description: "PLC panel governing Line 2 power and operational status."
+
+  INV-WH-01:
+    name: "Warehouse Inventory Management System"
+    type: "INVENTORY"
+    room: "ROOM-WH-01"
+    description: "Automated warehouse spare parts storage cabinet."
+
+  SP-BRG-M05:
+    name: "Spare Bearing M-05"
+    type: "SPARE_PART"
+    room: "ROOM-WH-01"
+    part_of: "INV-WH-01"
+    description: "Replacement roller bearing assembly for Drive Motor M-05."
+
+  # Legacy assets preserved for test suite backwards compatibility
   CV-01:
     name: "Conveyor Line 1"
     type: "CONVEYOR"

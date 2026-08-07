@@ -89,8 +89,18 @@ class TextParser:
         assets_cfg = self.config_loader.asset_registry.get("assets", {})
         sensors_cfg = self.config_loader.sensor_registry.get("sensors", {})
 
-        # Tier 1: Explicit room sentence
-        # e.g., "Location: Packaging Bay 1 (ROOM-PACK-01)." or "in Packaging Bay 1 (ROOM-PACK-01)."
+        # Tier 1: Explicit room sentence / header
+        loc_match = re.search(r'Location:\s*(?:[^(]+)\((ROOM-[A-Z0-9-]+)\)', observation)
+        if loc_match:
+            detected = loc_match.group(1)
+            if detected in rooms_cfg:
+                return {
+                    "room": detected,
+                    "confidence": 1.0,
+                    "source": "deterministic_parser",
+                    "tier": 1
+                }
+
         for room_id, rdata in rooms_cfg.items():
             rname = rdata.get("name", "")
             if room_id in observation or (rname and rname in observation):

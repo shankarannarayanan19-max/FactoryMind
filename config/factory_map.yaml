@@ -1,15 +1,31 @@
 rooms:
+  ROOM-MOTOR-01:
+    name: "Motor Room"
+    description: "Heavy machinery motor room housing drive motor M-05."
+    exits:
+      east: "ROOM-CTRL-01"
+
+  ROOM-CTRL-01:
+    name: "Control Room 1"
+    description: "Central SCADA control station monitoring Line 1 and Line 2 production status."
+    exits:
+      west: "ROOM-PACK-01"
+      east: "ROOM-WH-01"
+
+  ROOM-WH-01:
+    name: "Warehouse"
+    description: "Industrial warehouse storage bay containing spare mechanical parts inventory."
+    exits:
+      west: "ROOM-CTRL-01"
+
+  # Legacy fallback room aliases for existing unit tests
   ROOM-PACK-01:
     name: "Packaging Bay 1"
     description: "Main packaging bay containing conveyor line CV-01 and drive assemblies."
     exits:
       east: "ROOM-CTRL-01"
       north: "ROOM-MAINT-01"
-  ROOM-CTRL-01:
-    name: "Control Room 1"
-    description: "Central control room with SCADA workstations and main breaker panels."
-    exits:
-      west: "ROOM-PACK-01"
+
   ROOM-MAINT-01:
     name: "Maintenance Shop"
     description: "Maintenance workshop with diagnostic tools and replacement components."

@@ -1,4 +1,33 @@
 sensors:
+  # 3-Room Industrial Scenario Sensors
+  TS-M05-BRG:
+    name: "Motor M-05 Bearing Temperature Sensor"
+    type: "SENSOR"
+    sensor_type: "TEMPERATURE"
+    room: "ROOM-MOTOR-01"
+    monitors: "M-05"
+    unit: "C"
+    description: "Fixed RTD surface temperature sensor mounted on M-05 bearing housing."
+
+  VS-M05:
+    name: "Motor M-05 Vibration Sensor"
+    type: "SENSOR"
+    sensor_type: "VIBRATION"
+    room: "ROOM-MOTOR-01"
+    monitors: "M-05"
+    unit: "mm/s"
+    description: "Piezoelectric accelerometer measuring RMS vibration on M-05 drive shaft."
+
+  RPM-M05:
+    name: "Motor M-05 Tachometer Speed Sensor"
+    type: "SENSOR"
+    sensor_type: "SPEED"
+    room: "ROOM-MOTOR-01"
+    monitors: "M-05"
+    unit: "RPM"
+    description: "Optical tachometer measuring M-05 rotational speed."
+
+  # Legacy sensors preserved for test suite backwards compatibility
   TS-CVM02-BRG:
     name: "Tail Bearing Temperature Sensor"
     type: "SENSOR"
@@ -7,6 +36,7 @@ sensors:
     monitors: "CV-M02"
     unit: "C"
     description: "Fixed RTD surface temperature sensor mounted on CV-M02 bearing housing."
+
   VS-CVM02:
     name: "Tail Motor Vibration Sensor"
     type: "SENSOR"

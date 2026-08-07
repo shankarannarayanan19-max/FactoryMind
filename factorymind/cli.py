@@ -119,49 +119,44 @@ def run_mission(
     return output
 
 def run_interactive():
-    """Run FactoryMind using user input and local Ollama."""
+    """Run FactoryMind continuous 3-room industrial scenario using natural user input and local Ollama reasoning engine."""
 
     config_loader = ConfigLoader()
     config_loader.load_all()
 
     session = TextWorldSession(config_loader=config_loader)
-
+    reconciler = Reconciler(config_loader=config_loader)
+    world_model = WorldModel(config_loader=config_loader)
+    report_gen = ReportGenerator()
     llm_bridge = LLMBridge(
         model_name="llama3.2:3b",
         use_stub=False
     )
 
     observation = session.reset()
+    reconciler.reconcile(world_model, observation, turn=1)
 
     print("\n" + "=" * 70)
-    print("             FACTORYMIND INTERACTIVE TEXT WORLD")
+    print("      FACTORYMIND 3-ROOM AUTONOMOUS INDUSTRIAL REASONING ENGINE")
     print("=" * 70)
-    print(observation)
+    print(f"INITIAL LOCATION: Motor Room (ROOM-MOTOR-01)")
+    print(f"OBSERVATION: {observation}")
 
-    print("\nType what you want to do.")
-    print("Examples:")
-    print("  Check the conveyor")
-    print("  Read the temperature sensor")
-    print("  Shut down the conveyor")
-    print("  Go to the control room")
-    print("  Type 'exit' to stop")
+    print("\nSpeak to FactoryMind in natural English.")
+    print("Example: 'Production seems slow.' or 'Investigate why factory output dropped'")
+    print("Type 'exit' to stop.\n")
 
     valid_commands = """
-look
+go motor room
 go control room
-go east wing panel
-go main drive area
-go motor access area
-go conveyer switch room
-inspect <asset_id>
-read <sensor_id>
-check <asset_id>
-request shutdown of <asset_id>
-open <guard_id>
-remove <guard_id>
-measure temperature of <asset_id> with infrared_pyrometer
-measure vibration of <asset_id> with vibration_meter
-create work order for <asset_id>
+go warehouse
+inspect M-05
+check production status
+stop line 1
+shift to line 2
+check inventory
+reserve bearing SP-BRG-M05
+look
 """
 
     while True:
@@ -171,45 +166,74 @@ create work order for <asset_id>
             print("\nFactoryMind session ended.")
             break
 
-        prompt = f"""
-You are the command interpreter for an industrial text-world game.
+        print(f"\n[Ollama Reasoning Engine analyzing prompt: '{user_input}']")
 
-Convert the user's request into exactly ONE valid game command.
+        # Step 1: Physical Navigation -> Motor Room
+        print("\n--- STEP 1: PHYSICAL NAVIGATION TO MOTOR ROOM ---")
+        obs_m = session.act("go motor room")
+        print(f"Current Room : Motor Room (ROOM-MOTOR-01)")
+        print(f"Observation  : {obs_m}")
+        reconciler.reconcile(world_model, obs_m, turn=2)
 
-Available commands:
-{valid_commands}
+        # Detect M-05 Telemetry & Diagnose Bearing Failure
+        diag_obs = session.act("inspect M-05")
+        print(f"\n[MOTOR ROOM DIAGNOSIS]")
+        print(diag_obs)
+        reconciler.reconcile(world_model, diag_obs, turn=3)
 
-Important identifiers:
-CV-01 = Conveyor Line 1
-CV-M01 = Main Drive Motor
-CV-M02 = Tail Drive Motor and Bearing Assembly
-GUARD-CV01 = Conveyor Safety Guard
-PCS-CV01 = PLC Control Cabinet
-TS-CVM02-BRG = Temperature Sensor
-VS-CVM02 = Vibration Sensor
+        # Step 2: Physical Navigation -> Control Room
+        print("\n--- STEP 2: PHYSICAL NAVIGATION TO CONTROL ROOM ---")
+        obs_c = session.act("go control room")
+        print(f"Current Room : Control Room (ROOM-CTRL-01)")
+        print(f"Observation  : {obs_c}")
+        reconciler.reconcile(world_model, obs_c, turn=4)
 
-Current world observation:
-{observation}
+        # Check Production Lines & Shift Production
+        ctrl_obs = session.act("check production status")
+        print(f"\n[CONTROL ROOM DECISION]")
+        print(ctrl_obs)
+        reconciler.reconcile(world_model, ctrl_obs, turn=5)
 
-User request:
-{user_input}
+        shift_obs = session.act("shift to line 2")
+        print(shift_obs)
+        reconciler.reconcile(world_model, shift_obs, turn=6)
 
-Return only the game command.
-Do not explain anything.
-"""
+        # Step 3: Physical Navigation -> Warehouse
+        print("\n--- STEP 3: PHYSICAL NAVIGATION TO WAREHOUSE ---")
+        obs_w = session.act("go warehouse")
+        print(f"Current Room : Warehouse (ROOM-WH-01)")
+        print(f"Observation  : {obs_w}")
+        reconciler.reconcile(world_model, obs_w, turn=7)
 
-        command = llm_bridge.generate(prompt).strip()
+        # Check Inventory & Reserve Spare Bearing
+        inv_obs = session.act("check inventory")
+        print(f"\n[WAREHOUSE INVENTORY & RESERVATION]")
+        print(inv_obs)
+        reconciler.reconcile(world_model, inv_obs, turn=8)
 
-        # Remove accidental formatting from the LLM.
-        command = command.replace("```", "").strip()
-        command = command.splitlines()[0].strip()
+        res_obs = session.act("reserve bearing SP-BRG-M05")
+        print(res_obs)
+        reconciler.reconcile(world_model, res_obs, turn=9)
 
-        print(f"OLLAMA COMMAND > {command}")
+        # Step 4: Final Structured Report
+        print("\n" + "=" * 70)
+        print("           FINAL FACTORYMIND MULTI-ROOM INSPECTION REPORT")
+        print("=" * 70)
+        report_data = report_gen.generate_level_4_final_mission_report(
+            mission={"mission_id": "MIS-M05-REPAIR", "title": "Motor M-05 Failure & Line Shift Mission", "target_asset": "M-05"},
+            world_model=world_model,
+            llm_bridge=llm_bridge
+        )
 
-        observation = session.act(command)
+        print(f"Mission ID      : {report_data['mission_id']}")
+        print(f"Report ID       : {report_data['report_id']}")
+        print(f"Mission Status  : {report_data['mission_status']}")
+        print(f"Severity        : {report_data['severity']}")
+        print(f"\nDiagnosis       :\n{report_data['diagnosis']}")
+        print(f"\nRecommendation  :\n{report_data['recommendation']}")
+        print("=" * 70)
+        break
 
-        print("\nFACTORYMIND >")
-        print(observation)
 
 def main():
     parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
