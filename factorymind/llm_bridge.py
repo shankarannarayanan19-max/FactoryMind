@@ -11,7 +11,7 @@ class LLMBridge:
 
     def __init__(
         self,
-        model_name: str = "llama3.2:3b",
+        model_name: str = "qwen3:4b",
         base_url: str = "http://127.0.0.1:11434",
         use_stub: bool = True,
         config_loader: Optional[ConfigLoader] = None
@@ -31,14 +31,13 @@ class LLMBridge:
 
         try:
             response = requests.post(
-                f"{self.base_url}/api/generate",
+                "http://127.0.0.1:11434/api/generate",
                 json={
                     "model": self.model_name,
                     "prompt": prompt,
-                    "stream": False,
-                    "options": {"temperature": 0.2}
+                    "stream": False
                 },
-                timeout=30
+                timeout=120
             )
             response.raise_for_status()
             data: Dict[str, Any] = response.json()

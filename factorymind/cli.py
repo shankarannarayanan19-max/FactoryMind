@@ -1,43 +1,68 @@
-"""CLI Entry Point & Standalone Mission Runner for FactoryMind (§23).
+"""
+CLI Entry Point for FactoryMind.
 
-Usage:
-    python -m factorymind.cli --mission MIS-CV01-INSPECT --auto --report-level 4
+Run interactive local mode:
+    python -m factorymind.cli --interactive
+
+Run automatic mission mode:
+    python -m factorymind.cli \
+        --mission MIS-CV01-INSPECT \
+        --auto \
+        --max-turns 15 \
+        --report-level 4
 """
 
-import sys
+from __future__ import annotations
+
 import argparse
 import json
-from typing import Dict, Any, Optional
+import re
+from typing import Any, Dict
+
 from factorymind.config_loader import ConfigLoader
+from factorymind.database import FactoryDatabase
 from factorymind.environment_interface import TextWorldSession
-from factorymind.reconciler import Reconciler
-from factorymind.world_model import WorldModel
-from factorymind.information_analyser import InformationAnalyser
-from factorymind.planner import Planner
-from factorymind.safety_validator import SafetyValidator
 from factorymind.executor import Executor
-from factorymind.mission_checker import MissionChecker
-from factorymind.report_generator import ReportGenerator
+from factorymind.information_analyser import InformationAnalyser
 from factorymind.llm_bridge import LLMBridge
+from factorymind.mission_checker import MissionChecker
+from factorymind.planner import Planner
+from factorymind.reconciler import Reconciler
+from factorymind.report_generator import ReportGenerator
+from factorymind.safety_validator import SafetyValidator
+from factorymind.world_model import WorldModel
+
+
+QWEN_MODEL = "qwen3:4b"
+
+
+# ---------------------------------------------------------------------
+# Automatic mission mode
+# ---------------------------------------------------------------------
 
 def run_mission(
     mission_id: str = "MIS-CV01-INSPECT",
     auto: bool = True,
     max_turns: int = 15,
-    report_level: int = 4
+    report_level: int = 4,
 ) -> Dict[str, Any]:
-    """Run FactoryMind mission loop (§23 architecture) and return report."""
+    """Run the original autonomous FactoryMind mission."""
+
     config_loader = ConfigLoader()
     config_loader.load_all()
 
-    # Find mission config
     mission = None
-    for m in config_loader.missions:
-        if m.get("mission_id") == mission_id:
-            mission = m
+
+    for mission_data in config_loader.missions:
+        if mission_data.get("mission_id") == mission_id:
+            mission = mission_data
             break
-    if not mission:
-        mission = config_loader.missions[0] if config_loader.missions else {"mission_id": mission_id}
+
+    if mission is None:
+        if config_loader.missions:
+            mission = config_loader.missions[0]
+        else:
+            mission = {"mission_id": mission_id}
 
     session = TextWorldSession(config_loader=config_loader)
     reconciler = Reconciler(config_loader=config_loader)
@@ -47,107 +72,461 @@ def run_mission(
     validator = SafetyValidator(config_loader=config_loader)
     executor = Executor()
     checker = MissionChecker()
-    report_gen = ReportGenerator()
-    llm_bridge = LLMBridge(
-    model_name="llama3.2:3b",
-    use_stub=False
-)
-    inventory = ["infrared_pyrometer", "vibration_meter"]
-    known_tool_locations = {"infrared_pyrometer": "ROOM-PACK-01"}
+    report_generator = ReportGenerator()
 
-    # Turn 1: Reset environment
-    obs1 = session.reset()
-    reconciler.reconcile(world_model, obs1, turn=1)
+    llm_bridge = LLMBridge(
+        model_name=QWEN_MODEL,
+        use_stub=False,
+    )
+
+    inventory = [
+        "infrared_pyrometer",
+        "vibration_meter",
+    ]
+
+    known_tool_locations = {
+        "infrared_pyrometer": "ROOM-MOTOR-01",
+        "vibration_meter": "ROOM-MOTOR-01",
+    }
+
+    initial_observation = session.reset()
+    reconciler.reconcile(
+        world_model,
+        initial_observation,
+        turn=1,
+    )
 
     for turn in range(2, max_turns + 1):
-        current_room = world_model.agent.get("location", "ROOM-PACK-01")
-        gaps = analyser.find_missing_evidence(mission, world_model)
+        current_room = world_model.agent.get(
+            "location",
+            session.current_room,
+        )
 
-        # Plan action
-        plan_action = planner.plan(
+        gaps = analyser.find_missing_evidence(
+            mission,
+            world_model,
+        )
+
+        planned_action = planner.plan(
             current_room=current_room,
             mission=mission,
             inventory=inventory,
-            missing_information=gaps["recommended_information_need"],
+            missing_information=gaps[
+                "recommended_information_need"
+            ],
             known_tool_locations=known_tool_locations,
-            world_model=world_model
+            world_model=world_model,
         )
 
-        # Validate action
         validation = validator.validate(
-            action_dict=plan_action,
+            action_dict=planned_action,
             current_room=current_room,
             inventory=inventory,
-            world_model=world_model
+            world_model=world_model,
         )
 
-        if validation["safety_block"]:
-            next_act = validation["allowed_next_actions"][0]
-            plan_action = {
-                "goal": "safety_mitigation",
-                "proposed_action": next_act,
-                "expected_destination": current_room,
-                "reason": f"Mitigate safety block rule {validation['rule_id']}",
-                "confidence": 1.0
-            }
+        if validation.get("safety_block"):
+            allowed_actions = validation.get(
+                "allowed_next_actions",
+                [],
+            )
 
-        # Execute action
+            if allowed_actions:
+                next_action = allowed_actions[0]
+
+                planned_action = {
+                    "goal": "safety_mitigation",
+                    "proposed_action": next_action,
+                    "expected_destination": current_room,
+                    "reason": (
+                        "Mitigate safety rule "
+                        f"{validation.get('rule_id', 'UNKNOWN')}"
+                    ),
+                    "confidence": 1.0,
+                }
+
         executor.execute(
-            action_dict=plan_action,
+            action_dict=planned_action,
             session=session,
             reconciler=reconciler,
             world_model=world_model,
-            turn=turn
+            turn=turn,
         )
 
-        # Check completion
-        eval_res = checker.evaluate(mission, world_model)
-        if eval_res["complete"]:
+        evaluation = checker.evaluate(
+            mission,
+            world_model,
+        )
+
+        if evaluation.get("complete"):
             break
 
-    # Generate requested report level
     if report_level == 1:
-        last_cmd = world_model.action_history[-1]["observation"] if world_model.action_history else "look"
-        output = {"level": 1, "text": report_gen.generate_level_1_command_echo(last_cmd, obs1)}
-    elif report_level == 2:
-        output = {"level": 2, "json": report_gen.generate_level_2_structured_json(world_model)}
-    elif report_level == 3:
-        facts = {"asset_id": "CV-M02", "health_state": "CRITICAL", "turn": len(world_model.action_history)}
-        output = {"level": 3, "text": report_gen.generate_level_3_explainable_response(facts, llm_bridge)}
-    else:
-        output = {"level": 4, "report": report_gen.generate_level_4_final_mission_report(mission, world_model, llm_bridge)}
+        if world_model.action_history:
+            last_observation = world_model.action_history[-1].get(
+                "observation",
+                "",
+            )
+        else:
+            last_observation = initial_observation
 
-    return output
+        return {
+            "level": 1,
+            "text": report_generator.generate_level_1_command_echo(
+                last_observation,
+                initial_observation,
+            ),
+        }
 
-def run_interactive():
-    """Run FactoryMind continuous 3-room industrial scenario using natural user input and local Ollama reasoning engine."""
+    if report_level == 2:
+        return {
+            "level": 2,
+            "json": report_generator.generate_level_2_structured_json(
+                world_model
+            ),
+        }
 
-    config_loader = ConfigLoader()
-    config_loader.load_all()
+    if report_level == 3:
+        facts = {
+            "asset_id": "M-05",
+            "health_state": "CRITICAL",
+            "turn": len(world_model.action_history),
+        }
 
-    session = TextWorldSession(config_loader=config_loader)
-    reconciler = Reconciler(config_loader=config_loader)
-    world_model = WorldModel(config_loader=config_loader)
-    report_gen = ReportGenerator()
-    llm_bridge = LLMBridge(
-        model_name="llama3.2:3b",
-        use_stub=False
+        return {
+            "level": 3,
+            "text": (
+                report_generator
+                .generate_level_3_explainable_response(
+                    facts,
+                    llm_bridge,
+                )
+            ),
+        }
+
+    return {
+        "level": 4,
+        "report": (
+            report_generator
+            .generate_level_4_final_mission_report(
+                mission,
+                world_model,
+                llm_bridge,
+            )
+        ),
+    }
+
+
+# ---------------------------------------------------------------------
+# SQLite world-state helpers
+# ---------------------------------------------------------------------
+
+def restore_session_state(
+    database: FactoryDatabase,
+    session: TextWorldSession,
+) -> None:
+    """Restore saved world state from the local SQLite database."""
+
+    saved_room = database.load_world_state(
+        "current_room",
+        default=None,
     )
 
-    observation = session.reset()
-    reconciler.reconcile(world_model, observation, turn=1)
+    if saved_room:
+        session.current_room = saved_room
+
+    saved_assets = database.load_world_state(
+        "asset_states",
+        default=None,
+    )
+
+    if saved_assets and hasattr(session, "asset_states"):
+        session.asset_states.update(saved_assets)
+
+    saved_sensors = database.load_world_state(
+        "sensor_telemetry",
+        default=None,
+    )
+
+    if saved_sensors and hasattr(session, "sensor_telemetry"):
+        session.sensor_telemetry.update(saved_sensors)
+
+    # These states are stored only if your environment defines them.
+    for attribute_name in [
+        "production_states",
+        "production_state",
+        "inventory_states",
+        "inventory_state",
+        "warehouse_inventory",
+        "notifications",
+        "maintenance_orders",
+        "purchase_requests",
+    ]:
+        saved_value = database.load_world_state(
+            attribute_name,
+            default=None,
+        )
+
+        if saved_value is not None and hasattr(
+            session,
+            attribute_name,
+        ):
+            setattr(
+                session,
+                attribute_name,
+                saved_value,
+            )
+
+
+def save_session_state(
+    database: FactoryDatabase,
+    session: TextWorldSession,
+) -> None:
+    """Persist the current FactoryMind world state locally."""
+
+    database.save_world_state(
+        "current_room",
+        session.current_room,
+    )
+
+    if hasattr(session, "asset_states"):
+        database.save_world_state(
+            "asset_states",
+            session.asset_states,
+        )
+
+    if hasattr(session, "sensor_telemetry"):
+        database.save_world_state(
+            "sensor_telemetry",
+            session.sensor_telemetry,
+        )
+
+    for attribute_name in [
+        "production_states",
+        "production_state",
+        "inventory_states",
+        "inventory_state",
+        "warehouse_inventory",
+        "notifications",
+        "maintenance_orders",
+        "purchase_requests",
+    ]:
+        if hasattr(session, attribute_name):
+            database.save_world_state(
+                attribute_name,
+                getattr(session, attribute_name),
+            )
+
+
+# ---------------------------------------------------------------------
+# Interactive output helpers
+# ---------------------------------------------------------------------
+
+def print_world_state(
+    database: FactoryDatabase,
+    session: TextWorldSession,
+) -> None:
+    """Print the current local world model."""
 
     print("\n" + "=" * 70)
-    print("      FACTORYMIND 3-ROOM AUTONOMOUS INDUSTRIAL REASONING ENGINE")
+    print("                     FACTORYMIND WORLD STATE")
     print("=" * 70)
-    print(f"INITIAL LOCATION: Motor Room (ROOM-MOTOR-01)")
-    print(f"OBSERVATION: {observation}")
 
-    print("\nSpeak to FactoryMind in natural English.")
-    print("Example: 'Production seems slow.' or 'Investigate why factory output dropped'")
-    print("Type 'exit' to stop.\n")
+    print(f"Current Room : {session.current_room}")
 
-    valid_commands = """
+    if hasattr(session, "asset_states"):
+        print("\nASSET STATES")
+        print("-" * 70)
+
+        for asset_id, state in session.asset_states.items():
+            print(f"{asset_id}: {json.dumps(state, indent=2)}")
+
+    if hasattr(session, "sensor_telemetry"):
+        print("\nSENSOR TELEMETRY")
+        print("-" * 70)
+
+        for sensor_id, telemetry in session.sensor_telemetry.items():
+            print(f"{sensor_id}: {json.dumps(telemetry, indent=2)}")
+
+    for attribute_name in [
+        "production_states",
+        "production_state",
+        "inventory_states",
+        "inventory_state",
+        "warehouse_inventory",
+        "notifications",
+        "maintenance_orders",
+        "purchase_requests",
+    ]:
+        if hasattr(session, attribute_name):
+            heading = attribute_name.replace("_", " ").upper()
+
+            print(f"\n{heading}")
+            print("-" * 70)
+            print(
+                json.dumps(
+                    getattr(session, attribute_name),
+                    indent=2,
+                    default=str,
+                )
+            )
+
+    print("\nDATABASE")
+    print("-" * 70)
+    print(f"Local file : {database.db_path}")
+    print("=" * 70)
+
+
+def print_history(
+    database: FactoryDatabase,
+    limit: int = 15,
+) -> None:
+    """Print recent locally stored conversation history."""
+
+    history = database.get_recent_conversation(limit=limit)
+
+    print("\n" + "=" * 70)
+    print("                 RECENT FACTORYMIND CONVERSATION")
+    print("=" * 70)
+
+    if not history:
+        print("No previous conversation is stored.")
+    else:
+        for item in history:
+            role = item.get("role", "unknown").upper()
+            content = item.get("content", "")
+            print(f"\n{role} > {content}")
+
+    print("\n" + "=" * 70)
+
+
+def remove_qwen_thinking(text: str) -> str:
+    """Remove optional Qwen <think> blocks and Markdown fences."""
+
+    cleaned = re.sub(
+        r"<think>.*?</think>",
+        "",
+        text,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    cleaned = cleaned.replace("```json", "")
+    cleaned = cleaned.replace("```", "")
+
+    return cleaned.strip()
+
+
+def parse_qwen_response(
+    response_text: str,
+) -> Dict[str, str]:
+    """
+    Parse Qwen output.
+
+    Expected format:
+        {"type": "command", "command": "inspect M-05"}
+
+    or:
+        {"type": "chat", "message": "Hello."}
+    """
+
+    cleaned = remove_qwen_thinking(response_text)
+
+    try:
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+
+        if start != -1 and end != -1:
+            parsed = json.loads(cleaned[start:end + 1])
+
+            response_type = str(
+                parsed.get("type", "")
+            ).strip().lower()
+
+            if response_type == "command":
+                return {
+                    "type": "command",
+                    "command": str(
+                        parsed.get("command", "")
+                    ).strip(),
+                }
+
+            return {
+                "type": "chat",
+                "message": str(
+                    parsed.get(
+                        "message",
+                        "How can I help with the factory?",
+                    )
+                ).strip(),
+            }
+
+    except (json.JSONDecodeError, TypeError):
+        pass
+
+    # Fallback if the model returns only a command.
+    valid_command_prefixes = (
+        "look",
+        "go ",
+        "inspect ",
+        "check ",
+        "stop ",
+        "shift ",
+        "reserve ",
+        "read ",
+        "measure ",
+        "create ",
+        "request ",
+        "open ",
+        "remove ",
+    )
+
+    first_line = cleaned.splitlines()[0].strip()
+
+    if first_line.lower().startswith(valid_command_prefixes):
+        return {
+            "type": "command",
+            "command": first_line,
+        }
+
+    return {
+        "type": "chat",
+        "message": cleaned or "How can I help with the factory?",
+    }
+
+
+def build_qwen_prompt(
+    user_input: str,
+    observation: str,
+    session: TextWorldSession,
+    database: FactoryDatabase,
+) -> str:
+    """Create a strict local-Qwen reasoning prompt."""
+
+    history = database.get_recent_conversation(limit=8)
+
+    history_text = "\n".join(
+        f"{item['role']}: {item['content']}"
+        for item in history
+    )
+
+    return f"""
+You are FactoryMind, a local industrial text-world reasoning agent.
+
+You run entirely locally using Ollama Qwen.
+You must understand the user's natural-English request.
+
+Current room:
+{session.current_room}
+
+Current observation:
+{observation}
+
+Recent local conversation:
+{history_text}
+
+Valid executable game commands:
+
+look
 go motor room
 go control room
 go warehouse
@@ -157,158 +536,465 @@ stop line 1
 shift to line 2
 check inventory
 reserve bearing SP-BRG-M05
-look
-"""
+read TS-M05-BRG
+read VS-M05
+read RPM-M05
+create work order for M-05
+
+Rules:
+
+1. Return exactly one JSON object.
+2. Do not use Markdown.
+3. Do not invent commands outside the command list.
+4. If the user only greets you, asks a question, or has not requested
+   an executable action, return a chat response.
+5. Never start the full scenario merely because the user says hello.
+6. Select only one command per user turn.
+7. The user controls the interaction. Do not execute all rooms at once.
+8. Use the current room and previous conversation when selecting an action.
+
+For an executable action, return:
+
+{{"type":"command","command":"one valid command"}}
+
+For a normal conversational response, return:
+
+{{"type":"chat","message":"your concise response"}}
+
+User request:
+{user_input}
+""".strip()
+
+
+# ---------------------------------------------------------------------
+# True interactive Qwen mode
+# ---------------------------------------------------------------------
+
+def run_interactive() -> None:
+    """
+    Run a continuous user-driven FactoryMind session.
+
+    User input -> local Qwen -> one command -> environment ->
+    world model -> SQLite -> wait for next user input.
+    """
+
+    config_loader = ConfigLoader()
+    config_loader.load_all()
+
+    database = FactoryDatabase()
+
+    session = TextWorldSession(
+        config_loader=config_loader
+    )
+
+    reconciler = Reconciler(
+        config_loader=config_loader
+    )
+
+    world_model = WorldModel(
+        config_loader=config_loader
+    )
+
+    llm_bridge = LLMBridge(
+        model_name=QWEN_MODEL,
+        use_stub=False,
+    )
+
+    observation = session.reset()
+
+    restore_session_state(
+        database,
+        session,
+    )
+
+    observation = session.observe()
+
+    reconciler.reconcile(
+        world_model,
+        observation,
+        turn=1,
+    )
+
+    print("\n" + "=" * 70)
+    print("         FACTORYMIND LOCAL QWEN + SQLITE TEXT WORLD")
+    print("=" * 70)
+    print(f"Model         : {QWEN_MODEL}")
+    print(f"Current Room  : {session.current_room}")
+    print(f"Local DB      : {database.db_path}")
+    print("\n" + observation)
+
+    print("\nNatural-language examples:")
+    print("  Hello")
+    print("  Production seems slow")
+    print("  Check Motor M-05")
+    print("  Go to the control room")
+    print("  Check whether production can continue")
+    print("  Go to the warehouse")
+    print("  Find and reserve the spare bearing")
+
+    print("\nLocal commands:")
+    print("  show world")
+    print("  show history")
+    print("  look")
+    print("  exit")
+
+    turn = 1
 
     while True:
-        user_input = input("\nYOU > ").strip()
+        try:
+            user_input = input("\nYOU > ").strip()
 
-        if user_input.lower() in ["exit", "quit", "bye"]:
-            print("\nFactoryMind session ended.")
+        except (KeyboardInterrupt, EOFError):
+            print("\n\nFactoryMind session ended.")
+            save_session_state(database, session)
             break
 
-        print(f"\n[Ollama Reasoning Engine analyzing prompt: '{user_input}']")
+        if not user_input:
+            continue
 
-        # Step 1: Physical Navigation -> Motor Room
-        print("\n--- STEP 1: PHYSICAL NAVIGATION TO MOTOR ROOM ---")
-        obs_m = session.act("go motor room")
-        print(f"Current Room : Motor Room (ROOM-MOTOR-01)")
-        print(f"Observation  : {obs_m}")
-        reconciler.reconcile(world_model, obs_m, turn=2)
+        normalized_input = user_input.lower().strip()
 
-        # Detect M-05 Telemetry & Diagnose Bearing Failure
-        diag_obs = session.act("inspect M-05")
-        print(f"\n[MOTOR ROOM DIAGNOSIS]")
-        print(diag_obs)
-        reconciler.reconcile(world_model, diag_obs, turn=3)
+        if normalized_input in {
+            "exit",
+            "quit",
+            "bye",
+        }:
+            save_session_state(database, session)
 
-        # Step 2: Physical Navigation -> Control Room
-        print("\n--- STEP 2: PHYSICAL NAVIGATION TO CONTROL ROOM ---")
-        obs_c = session.act("go control room")
-        print(f"Current Room : Control Room (ROOM-CTRL-01)")
-        print(f"Observation  : {obs_c}")
-        reconciler.reconcile(world_model, obs_c, turn=4)
+            database.save_conversation(
+                "user",
+                user_input,
+            )
 
-        # Check Production Lines & Shift Production
-        ctrl_obs = session.act("check production status")
-        print(f"\n[CONTROL ROOM DECISION]")
-        print(ctrl_obs)
-        reconciler.reconcile(world_model, ctrl_obs, turn=5)
+            database.save_conversation(
+                "assistant",
+                "FactoryMind session ended.",
+            )
 
-        shift_obs = session.act("shift to line 2")
-        print(shift_obs)
-        reconciler.reconcile(world_model, shift_obs, turn=6)
+            print("\nFactoryMind session ended.")
+            print("World state saved locally.")
+            break
 
-        # Step 3: Physical Navigation -> Warehouse
-        print("\n--- STEP 3: PHYSICAL NAVIGATION TO WAREHOUSE ---")
-        obs_w = session.act("go warehouse")
-        print(f"Current Room : Warehouse (ROOM-WH-01)")
-        print(f"Observation  : {obs_w}")
-        reconciler.reconcile(world_model, obs_w, turn=7)
+        if normalized_input in {
+            "show world",
+            "world",
+            "show state",
+        }:
+            print_world_state(
+                database,
+                session,
+            )
+            continue
 
-        # Check Inventory & Reserve Spare Bearing
-        inv_obs = session.act("check inventory")
-        print(f"\n[WAREHOUSE INVENTORY & RESERVATION]")
-        print(inv_obs)
-        reconciler.reconcile(world_model, inv_obs, turn=8)
+        if normalized_input in {
+            "show history",
+            "history",
+        }:
+            print_history(database)
+            continue
 
-        res_obs = session.act("reserve bearing SP-BRG-M05")
-        print(res_obs)
-        reconciler.reconcile(world_model, res_obs, turn=9)
+        if normalized_input == "look":
+            observation = session.observe()
+            print("\nFACTORYMIND >")
+            print(observation)
+            continue
 
-        # Step 4: Final Structured Report
-        print("\n" + "=" * 70)
-        print("           FINAL FACTORYMIND MULTI-ROOM INSPECTION REPORT")
-        print("=" * 70)
-        report_data = report_gen.generate_level_4_final_mission_report(
-            mission={"mission_id": "MIS-M05-REPAIR", "title": "Motor M-05 Failure & Line Shift Mission", "target_asset": "M-05"},
-            world_model=world_model,
-            llm_bridge=llm_bridge
+        turn += 1
+
+        database.save_conversation(
+            "user",
+            user_input,
         )
-        import json 
 
-        with open("latest_mission_report.json", "w", encoding="utf-8") as f:
-            json.dump(report_data, f, indent=2, default=str)
+        prompt = build_qwen_prompt(
+            user_input=user_input,
+            observation=observation,
+            session=session,
+            database=database,
+        )
 
-        print("\n[Report saved to latest_mission_report.json]")
+        print("\n[Qwen is reasoning locally...]")
 
-        print(f"Mission ID      : {report_data['mission_id']}")
-        print(f"Report ID       : {report_data['report_id']}")
-        print(f"Mission Status  : {report_data['mission_status']}")
-        print(f"Severity        : {report_data['severity']}")
-        print(f"\nDiagnosis       :\n{report_data['diagnosis']}")
-        print(f"\nRecommendation  :\n{report_data['recommendation']}")
-        print("=" * 70)
-        break
+        try:
+            raw_response = llm_bridge.generate(prompt)
+
+        except Exception as error:
+            print("\nFACTORYMIND ERROR >")
+            print(
+                "Could not contact local Ollama Qwen model: "
+                f"{error}"
+            )
+            continue
+
+        decision = parse_qwen_response(raw_response)
+
+        if decision["type"] == "chat":
+            message = decision.get(
+                "message",
+                "How can I assist with the factory?",
+            )
+
+            database.save_conversation(
+                "assistant",
+                message,
+            )
+
+            print("\nFACTORYMIND >")
+            print(message)
+            continue
+
+        command = decision.get("command", "").strip()
+
+        if not command:
+            message = (
+                "I could not determine a safe factory action. "
+                "Please describe what you want me to inspect."
+            )
+
+            database.save_conversation(
+                "assistant",
+                message,
+            )
+
+            print("\nFACTORYMIND >")
+            print(message)
+            continue
+
+        print(f"\nQWEN ACTION > {command}")
+
+        try:
+            observation = session.act(command)
+
+        except Exception as error:
+            observation = (
+                f"Command execution failed for '{command}': "
+                f"{error}"
+            )
+
+        reconciler.reconcile(
+            world_model,
+            observation,
+            turn=turn,
+        )
+
+        save_session_state(
+            database,
+            session,
+        )
+
+        database.log_action(
+            turn=turn,
+            user_input=user_input,
+            llm_command=command,
+            observation=observation,
+            room_id=session.current_room,
+        )
+
+        database.save_conversation(
+            "assistant_command",
+            command,
+        )
+
+        database.save_conversation(
+            "observation",
+            observation,
+        )
+
+        print("\nFACTORYMIND >")
+        print(observation)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="FactoryMind Autonomous Industrial Inspection Runner")
-    parser.add_argument("--interactive", action="store_true", help="Run with user input through Ollama")
-    parser.add_argument("--mission", type=str, default="MIS-CV01-INSPECT", help="Mission ID to run")
-    parser.add_argument("--auto", action="store_true", default=True, help="Run mission in auto mode")
-    parser.add_argument("--max-turns", type=int, default=15, help="Maximum number of turns")
-    parser.add_argument("--report-level", type=int, default=4, help="Report level (1-4)") 
+# ---------------------------------------------------------------------
+# Report formatting
+# ---------------------------------------------------------------------
+
+def print_formatted_report(
+    result: Dict[str, Any],
+) -> None:
+    """Print an automatic mission result cleanly."""
+
+    if "report" not in result:
+        print("\nFACTORYMIND RESULT")
+        print("-" * 70)
+        print(json.dumps(result, indent=2, default=str))
+        return
+
+    report = result["report"]
+
+    print("\n" + "=" * 70)
+    print("               FACTORYMIND AI INSPECTION REPORT")
+    print("=" * 70)
+
+    print(
+        f"Mission ID      : "
+        f"{report.get('mission_id', 'UNKNOWN')}"
+    )
+
+    print(
+        f"Report ID       : "
+        f"{report.get('report_id', 'UNKNOWN')}"
+    )
+
+    print(
+        f"Mission Status  : "
+        f"{report.get('mission_status', 'UNKNOWN')}"
+    )
+
+    print(
+        f"Severity        : "
+        f"{report.get('severity', 'UNKNOWN')}"
+    )
+
+    print("\nDiagnosis")
+    print("-" * 70)
+    print(
+        report.get(
+            "diagnosis",
+            "No diagnosis available.",
+        )
+    )
+
+    print("\nRecommendation")
+    print("-" * 70)
+    print(
+        report.get(
+            "recommendation",
+            "No recommendation available.",
+        )
+    )
+
+    print("\nEvidence")
+    print("-" * 70)
+
+    evidence_items = report.get("evidence", [])
+
+    if not evidence_items:
+        print("No evidence recorded.")
+
+    for evidence in evidence_items:
+        print(
+            f"Sensor  : "
+            f"{evidence.get('sensor_id', 'UNKNOWN')}"
+        )
+
+        print(
+            f"Asset   : "
+            f"{evidence.get('monitored_asset', 'UNKNOWN')}"
+        )
+
+        print(
+            f"Reading : "
+            f"{evidence.get('value', 'N/A')} "
+            f"{evidence.get('unit', '')}"
+        )
+
+        print(
+            f"Status  : "
+            f"{evidence.get('status', 'UNKNOWN')}"
+        )
+
+        print()
+
+    print("Safety Events")
+    print("-" * 70)
+
+    safety_events = report.get("safety_checks", [])
+
+    if not safety_events:
+        print("No safety events recorded.")
+
+    for event in safety_events:
+        print(
+            f"Turn {event.get('turn', 0)} | "
+            f"{event.get('event_type', 'UNKNOWN')} | "
+            f"{event.get('severity', 'UNKNOWN')}"
+        )
+
+    repair_status = (
+        "Yes"
+        if report.get("repair_performed")
+        else "No"
+    )
+
+    print(f"\nRepair Performed : {repair_status}")
+    print("=" * 70)
+
+
+# ---------------------------------------------------------------------
+# Main CLI
+# ---------------------------------------------------------------------
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description=(
+            "FactoryMind local industrial "
+            "world-model runner"
+        )
+    )
+
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Use natural-language input through local Ollama Qwen",
+    )
+
+    parser.add_argument(
+        "--mission",
+        type=str,
+        default="MIS-CV01-INSPECT",
+        help="Mission ID to run",
+    )
+
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        help="Run the automatic mission planner",
+    )
+
+    parser.add_argument(
+        "--max-turns",
+        type=int,
+        default=15,
+        help="Maximum number of automatic mission turns",
+    )
+
+    parser.add_argument(
+        "--report-level",
+        type=int,
+        default=4,
+        choices=[1, 2, 3, 4],
+        help="Automatic report level",
+    )
+
     args = parser.parse_args()
+
     if args.interactive:
         run_interactive()
         return
 
-    res = run_mission(
+    result = run_mission(
         mission_id=args.mission,
         auto=args.auto,
         max_turns=args.max_turns,
-        report_level=args.report_level
+        report_level=args.report_level,
     )
 
-    with open("latest_mission_report.json", "w", encoding="utf-8") as f:
-        json.dump(res, f, indent=2, default=str)
+    with open(
+        "latest_mission_report.json",
+        "w",
+        encoding="utf-8",
+    ) as report_file:
+        json.dump(
+            result,
+            report_file,
+            indent=2,
+            default=str,
+        )
+
     print("\n[Report saved to latest_mission_report.json]")
-    if "report" in res:
-        report = res["report"]
-        print("\n" + "=" * 70)
-        print("               FACTORYMIND AI INSPECTION REPORT")
-        print("=" * 70)
 
-        print(f"Mission ID      : {report['mission_id']}")
-        print(f"Report ID       : {report['report_id']}")
-        print(f"Mission Status  : {report['mission_status']}")
-        print(f"Severity        : {report['severity']}")
+    print_formatted_report(result)
 
-        print("\nDiagnosis")
-        print("-" * 70)
-        print(report["diagnosis"])
-
-        print("\nRecommendation")
-        print("-" * 70)
-        print(report["recommendation"])
-
-        print("\nEvidence")
-        print("-" * 70)
-
-        for evidence in report.get("evidence", []):
-            print(f"Sensor  : {evidence['sensor_id']}")
-            print(f"Asset   : {evidence['monitored_asset']}")
-            print(f"Reading : {evidence['value']} {evidence['unit']}")
-            print(f"Status  : {evidence['status']}")
-            print()
-
-        print("Safety Events")
-        print("-" * 70)
-
-        for event in report.get("safety_checks", []):
-            print(
-                f"Turn {event.get('turn', 0)} | "
-                f"{event.get('event_type', '')} | "
-                f"{event.get('severity', '')}"
-            )
-
-        print("\nRepair Performed :", report.get("repair_performed", False))
-        print("=" * 70)
-    else:
-        print("=== FactoryMind Mission Execution Result ===")
-        print(res)
 
 if __name__ == "__main__":
     main()
-
